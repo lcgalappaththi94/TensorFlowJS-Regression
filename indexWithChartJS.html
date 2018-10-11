@@ -1,0 +1,95 @@
+<html>
+
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@0.11.2"> </script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.bundle.min.js"> </script>
+</head>
+
+<body>
+    <h1 style="display: inline;">Input a CSV file here</h1>
+    <input type="file" onchange="fileSelectHandler()" id="file_input">
+    <div style="padding:50px">
+        <canvas id="myChart" width="600" height="500"></canvas>
+    </div>
+
+    <script>
+        var vals = [];
+        var bestfit = [];
+
+        function compare(a, b) {
+            return a.x - b.x;
+        }
+
+        function fileSelectHandler() {
+            var oFile = $('#file_input')[0].files[0];
+            parseCSV(oFile, ',', function (result) {
+                for (let index = 0; index < result.length - 1; index++) {
+                    var x = Number(result[index][2]);   //x=gdp
+                    var y = Number(result[index][1]);   //y=martality
+                    var object = { x: x, y: y };
+                    vals.push(object);
+                    vals.sort(compare);
+
+                    const model = tf.sequential();
+                    model.add(tf.layers.dense({ units: 128, inputShape: [1] })); // layer 1
+                    model.add(tf.layers.dense({ units: 128, inputShape: [128], activation: "sigmoid" })); // layer 2
+                    model.add(tf.layers.dense({ units: 1, inputShape: [128] })); // output layer
+                    model.compile({ loss: 'meanSquaredError', optimizer: 'adam' }); // compile with params
+
+                    model.fit(tf.tensor(vals.map(a => a.x)), tf.tensor(vals.map(a => a.y)), { epochs: 10 }).then(() => {
+                        bestfit = model.predict(tf.tensor(vals.map(a => a.x), [vals.length, 1])).dataSync(); // create best-fit line from xs data
+                        var ctx = document.getElementById("myChart").getContext('2d'); // begin chart
+                        // Chart data and settings:
+                        var myChart = new Chart(ctx, {
+                            type: 'line',
+                            scaleOptions: {
+                                ticks: {
+                                    beginAtZero: true
+                                }
+                            },
+                            options: { scales: { xAxes: [{ ticks: { min: 0, beginAtZero: true } }] } },
+                            data: {
+                                labels: vals.map(a => a.x),
+                                datasets: [
+                                    {
+                                        label: 'Original Data Line',
+                                        data: vals.map(a => a.y),
+                                        borderWidth: 1,
+                                        borderColor: '#FF0000'
+                                    }, {
+                                        label: 'Best Fit line',
+                                        data: bestfit,
+                                        borderWidth: 1,
+                                        borderColor: '#FF0000',
+                                        backgroundColor: 'rgba(1,1,1,0)'
+                                    }]
+                            },
+                        });
+                    });
+                }
+
+
+            });
+        }
+
+
+        function parseCSV(file, delimiter, callback) {
+            var reader = new FileReader();
+            reader.onload = function () {
+                var lines = this.result.split('\n');
+                var result = lines.map(function (line) {
+                    return line.split(delimiter);
+                });
+                callback(result);
+            }
+            reader.readAsText(file);
+        }
+
+
+
+
+    </script>
+</body>
+
+</html>
